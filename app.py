@@ -32,6 +32,7 @@ CTF_FLAGS = {
     "BRUTE": generate_flag("BRUTE"),
     "COOKIE": generate_flag("COOKIE"),
     "ADMIN_DELETE": generate_flag("ADMIN_DELETE"),
+    "LEAKED_LOGIN": generate_flag("LEAKED_LOGIN"),
 }
 
 CTF_FLAG_TO_VULN = {
@@ -39,6 +40,7 @@ CTF_FLAG_TO_VULN = {
     CTF_FLAGS["BRUTE"]: "Brute Force Login",
     CTF_FLAGS["COOKIE"]: "Cookie Authorization Bypass",
     CTF_FLAGS["ADMIN_DELETE"]: "Insecure Admin Delete Action",
+    CTF_FLAGS["LEAKED_LOGIN"]: "Leaked User Login",
 }
 
 fallback_usernames = [
@@ -148,6 +150,7 @@ def ensure_database():
         ("luna", "moonlight"),
         ("mason", "mason456"),
         ("nina", "ninaabc"),
+        ("leaked_user", "leakedpass"),
     ]
     cursor.execute("SELECT COUNT(*) AS c FROM users")
     user_count = cursor.fetchone()[0]
@@ -230,6 +233,18 @@ def get_db():
 # -------------------------------------------------------
 @app.route("/api/login", methods=["POST"])
 def login():
+        # Special flag for logging in as leaked_user
+        if username == "leaked_user" and password == "leakedpass":
+            response = make_response(jsonify({
+                "success": True,
+                "message": "Login successful",
+                "username": username,
+                "ctf_flag": CTF_FLAGS["LEAKED_LOGIN"],
+                "flag_hint": "Leaked User Login"
+            }))
+            response.set_cookie("role", "user", httponly=False)
+            response.set_cookie("username", username, httponly=False)
+            return response
     data = request.get_json()
     username = data.get("username", "")
     password = data.get("password", "")
@@ -303,6 +318,7 @@ def search_products():
 
     # VULNERABLE: Direct string concatenation - allows UNION-based injection
     # Try: ' UNION SELECT username, password FROM users--
+    # Only leak the special 'leaked_user' for CTF
     query = "SELECT name, price FROM products WHERE name LIKE '%" + search + "%'"
 
     try:
@@ -311,9 +327,11 @@ def search_products():
         results = [dict(row) for row in rows]
         conn.close()
         response = {"success": True, "results": results, "query": query}
+        # If SQLi detected, replace results with only the leaked user
         if "union" in search.lower() and "users" in search.lower():
             response["ctf_flag"] = CTF_FLAGS["SQLI"]
             response["flag_hint"] = "SQL Injection"
+            response["results"] = [{"name": "leaked_user", "price": "leakedpass"}]
         return jsonify(response)
     except Exception as e:
         conn.close()

@@ -235,23 +235,25 @@ def get_db():
 # VULNERABILITY #1 & #2: Login - No rate limiting, no lockout
 # Returns specific error messages to aid brute force
 # -------------------------------------------------------
+
 @app.route("/api/login", methods=["POST"])
 def login():
-        # Special flag for logging in as leaked_user
-        if username == "leaked_user" and password == "leakedpass":
-            response = make_response(jsonify({
-                "success": True,
-                "message": "Login successful",
-                "username": username,
-                "ctf_flag": CTF_FLAGS["LEAKED_LOGIN"],
-                "flag_hint": "Leaked User Login"
-            }))
-            response.set_cookie("role", "user", httponly=False)
-            response.set_cookie("username", username, httponly=False)
-            return response
     data = request.get_json()
     username = data.get("username", "")
     password = data.get("password", "")
+
+    # Special flag for logging in as leaked_user
+    if username == "leaked_user" and password == "leakedpass":
+        response = make_response(jsonify({
+            "success": True,
+            "message": "Login successful",
+            "username": username,
+            "ctf_flag": CTF_FLAGS["LEAKED_LOGIN"],
+            "flag_hint": "Leaked User Login"
+        }))
+        response.set_cookie("role", "user", httponly=False)
+        response.set_cookie("username", username, httponly=False)
+        return response
 
     active_username, active_password = LAB_ACTIVE_CREDENTIAL
 

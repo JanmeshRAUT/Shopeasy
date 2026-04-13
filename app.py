@@ -10,7 +10,11 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join("/tmp", "shopeasy.db") if os.getenv("VERCEL") else os.path.join(BASE_DIR, "shopeasy.db")
+# Always use /tmp/shopeasy.db on Vercel for compatibility
+if os.getenv("VERCEL") or os.getenv("VERCEL_ENV") or os.path.exists("/tmp"):
+    DB_PATH = os.path.join("/tmp", "shopeasy.db")
+else:
+    DB_PATH = os.path.join(BASE_DIR, "shopeasy.db")
 WORDLIST_DIR = os.path.join(BASE_DIR, "data", "wordlists")
 
 

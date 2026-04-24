@@ -414,7 +414,8 @@ def search_products():
         conn.close()
         response = {"success": True, "results": results, "query": query}
         # If SQLi detected, replace results with only the leaked user
-        if "union" in search.lower() and "users" in search.lower():
+        is_sqli = "union" in search.lower() and ("users" in search.lower() or "staff_accounts" in search.lower())
+        if is_sqli:
             response["ctf_flag"] = CTF_FLAGS["SQLI"]
             response["flag_hint"] = "SQL Injection (Discovery)"
             

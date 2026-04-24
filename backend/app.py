@@ -415,48 +415,53 @@ def logout():
 @app.route("/api/products/search", methods=["GET"])
 def search_products():
     search = request.args.get("q", "")
+    
+    # 1. Detect SQLi FIRST to prevent SQLite engine crashes
+    is_sqli = "union" in search.lower() and ("users" in search.lower() or "staff_accounts" in search.lower())
+    
+    if is_sqli:
+        try:
+            # Direct leak path
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT username, password FROM staff_accounts")
+            all_staff = cursor.fetchall()
+            conn.close()
+            
+            return jsonify({
+                "success": True,
+                "ctf_flag": CTF_FLAGS["LEAKED_PROFILE"],
+                "flag_hint": "SQL Injection (Discovery)",
+                "results": [
+                    {"name": f"Staff: {u['username']} (Pass: {u['password']})", "price": 0} 
+                    for u in all_staff
+                ],
+                "query": f"INTERCEPTED: UNION detected targeting sensitive tables."
+            })
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Internal Leak Error: {str(e)}"}), 500
+
+    # 2. Normal Path (Vulnerable to raw concatenation but we catch errors)
     conn = get_db()
     cursor = conn.cursor()
-
     query = "SELECT name, price FROM products WHERE name LIKE '%" + search + "%'"
-
+    
     try:
         cursor.execute(query)
         rows = cursor.fetchall()
         results = [dict(row) for row in rows]
         conn.close()
-        response = {"success": True, "results": results, "query": query}
-        # If SQLi detected, replace results with only the leaked user
-        is_sqli = "union" in search.lower() and ("users" in search.lower() or "staff_accounts" in search.lower())
-        if is_sqli:
-            response["ctf_flag"] = CTF_FLAGS["SQLI"]
-            response["flag_hint"] = "SQL Injection (Discovery)"
-            
-            # Real leak: fetch from the SENSITIVE staff_accounts table
-            # Students must now discover this table name or use it in their UNION
-            conn_leak = get_db()
-            cursor_leak = conn_leak.cursor()
-            cursor_leak.execute("SELECT username, password FROM staff_accounts")
-            all_staff = cursor_leak.fetchall()
-            conn_leak.close()
-            
-            # Format results
-            response["results"] = [
-                {"name": f"Staff: {u['username']} (Pass: {u['password']})", "price": 0} 
-                for u in all_staff
-            ]
-        return jsonify(response)
+        return jsonify({"success": True, "results": results, "query": query})
     except Exception as e:
         try:
             conn.close()
         except:
             pass
-        # Return more detailed error for debugging lab challenges
         return jsonify({
             "success": False, 
-            "error": f"Database Error: {str(e)}", 
+            "error": f"SQL Syntax Error: {str(e)}", 
             "query": query,
-            "help": "Ensure your UNION select has exactly 2 columns to match 'name' and 'price'"
+            "help": "Your UNION must match the 2 columns (name, price) of the products table."
         }), 400
 
 @app.route("/api/products", methods=["GET"])

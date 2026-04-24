@@ -115,6 +115,18 @@ LAB_ACTIVE_CREDENTIAL = (
     get_daily_target(LAB_PASSWORD_WORDLIST, "pass"),
 )
 
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    # RESILIENCE: Check if DB is initialized (Vercel /tmp might be wiped)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM products LIMIT 1")
+    except:
+        # Tables don't exist, initialize them
+        ensure_database()
+    return conn
+
 print(f"[*] Daily Lab Target (Stable across instances): {LAB_ACTIVE_CREDENTIAL[0]}")
 
 # Stores random delete targets per actor (logged-in username or guest).

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import "../styles/AdminDashboard.css";
 
 // VULNERABILITY #4: Hidden admin panel - discovered via page source
 // VULNERABILITY #3: Access granted based on cookie value alone

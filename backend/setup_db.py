@@ -1,6 +1,8 @@
+import os
 import sqlite3
 
-DB_PATH = "shopeasy.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "shopeasy.db")
 
 def setup_database():
     conn = sqlite3.connect(DB_PATH)

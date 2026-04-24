@@ -22,7 +22,7 @@ def load_wordlist(filename, fallback_values):
     path = os.path.join(WORDLIST_DIR, filename)
     if not os.path.exists(path):
         return fallback_values
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8-sig") as f:
         values = [line.strip() for line in f.readlines() if line.strip()]
     return values if values else fallback_values
 
@@ -32,19 +32,16 @@ def generate_flag(tag):
 
 
 CTF_FLAGS = {
-    "SQLI": generate_flag("SQLI"),
+
     "BRUTE": generate_flag("BRUTE"),
-    "COOKIE": generate_flag("COOKIE"),
-    "ADMIN_DELETE": generate_flag("ADMIN_DELETE"),
-    "LEAKED_LOGIN": generate_flag("LEAKED_LOGIN"),
+    "ADMIN_DELETE": generate_flag("COOKIE"),
+    "LEAKED_PROFILE": generate_flag("SQLI"),
 }
 
 CTF_FLAG_TO_VULN = {
-    CTF_FLAGS["SQLI"]: "SQL Injection",
     CTF_FLAGS["BRUTE"]: "Brute Force Login",
-    CTF_FLAGS["COOKIE"]: "Cookie Authorization Bypass",
-    CTF_FLAGS["ADMIN_DELETE"]: "Insecure Admin Delete Action",
-    CTF_FLAGS["LEAKED_LOGIN"]: "Leaked User Login",
+    CTF_FLAGS["ADMIN_DELETE"]: "Cookie Authorization Bypass / Admin Actions",
+    CTF_FLAGS["LEAKED_PROFILE"]: "SQL Injection Data Breach",
 }
 
 fallback_usernames = [
@@ -63,20 +60,61 @@ fallback_passwords = [
 ]
 
 main_db_users = {"admin", "alice", "bob", "charlie", "diana"}
-LAB_USERNAME_WORDLIST = [
-    u for u in load_wordlist("usernames.txt", fallback_usernames) if u not in main_db_users
-]
-LAB_PASSWORD_WORDLIST = load_wordlist("passwords.txt", fallback_passwords)
+
+# ─── DETERMINISTIC TARGET SELECTION (For Vercel/Serverless Stability) ───
+# Ensures all concurrent users/instances see the same targets for a given day.
+def get_daily_target(wordlist, salt="default"):
+    if not wordlist:
+        return "fallback_user"
+    # Seed with current date + salt to keep it stable but rotating
+    seed_str = f"{datetime.date.today().isoformat()}_{salt}"
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+    rng = random.Random(seed)
+    return rng.choice(wordlist)
+
+# SQL Injection Targets (discovered via UNION)
+VULNERABLE_TARGET_USERS = {
+    "leaked_tester": "p@ss_leaked_99",
+    "audit_manager": "secure_audit_2026",
+    "staged_dev": "temp_dev_access"
+}
+
+# 1. Load initial lists
+_raw_usernames = load_wordlist("usernames.txt", fallback_usernames)
+_raw_passwords = load_wordlist("passwords.txt", fallback_passwords)
+
+# 2. Filter out SQLi target
+_usernames_no_sqli = [u for u in _raw_usernames if u not in VULNERABLE_TARGET_USERS]
+
+# 3. Exclude existing database users
+def get_lab_usernames():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM users")
+        existing_users = {row[0] for row in cursor.fetchall()}
+        cursor.execute("SELECT username FROM staff_accounts")
+        existing_staff = {row[0] for row in cursor.fetchall()}
+        conn.close()
+        collision_set = existing_users.union(existing_staff)
+        return [u for u in _usernames_no_sqli if u not in collision_set]
+    except:
+        return [u for u in _usernames_no_sqli if u not in main_db_users]
+
+LAB_USERNAME_WORDLIST = get_lab_usernames()
+LAB_PASSWORD_WORDLIST = _raw_passwords
 
 if not LAB_USERNAME_WORDLIST:
-    LAB_USERNAME_WORDLIST = fallback_usernames
-if not LAB_PASSWORD_WORDLIST:
-    LAB_PASSWORD_WORDLIST = fallback_passwords
+    LAB_USERNAME_WORDLIST = ["lab_tester_99"]
 
+# 4. Select the stable target for today
 LAB_ACTIVE_CREDENTIAL = (
-    random.choice(LAB_USERNAME_WORDLIST),
-    random.choice(LAB_PASSWORD_WORDLIST),
+    get_daily_target(LAB_USERNAME_WORDLIST, "user"),
+    get_daily_target(LAB_PASSWORD_WORDLIST, "pass"),
 )
+
+print(f"[*] Daily Lab Target (Stable across instances): {LAB_ACTIVE_CREDENTIAL[0]}")
+
 # Stores random delete targets per actor (logged-in username or guest).
 ADMIN_DELETE_TARGETS = {}
 
@@ -138,8 +176,19 @@ def ensure_database():
         """
     )
 
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS staff_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL
+        )
+        """
+    )
+
     users = [
-        ("admin", "admin123"),
+        ("admin", "admin_shopeasy_secure_#2026"),
         ("alice", "password1"),
         ("bob", "letmein"),
         ("charlie", "qwerty"),
@@ -154,13 +203,26 @@ def ensure_database():
         ("luna", "moonlight"),
         ("mason", "mason456"),
         ("nina", "ninaabc"),
-        ("leaked_user", "leakedpass"),
+        ("leaked_tester", "p@ss_leaked_99"),
+        ("audit_manager", "secure_audit_2026"),
+        ("staged_dev", "temp_dev_access"),
     ]
     cursor.execute("SELECT COUNT(*) AS c FROM users")
     user_count = cursor.fetchone()[0]
     if user_count == 0:
         cursor.executemany(
             "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)", users
+        )
+
+    staff = [
+        ("leaked_tester", "p@ss_leaked_99", "Tester"),
+        ("audit_manager", "secure_audit_2026", "Manager"),
+        ("staged_dev", "temp_dev_access", "Developer"),
+    ]
+    cursor.execute("SELECT COUNT(*) AS c FROM staff_accounts")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany(
+            "INSERT OR IGNORE INTO staff_accounts (username, password, role) VALUES (?, ?, ?)", staff
         )
 
     products = [
@@ -242,25 +304,36 @@ def login():
     username = data.get("username", "")
     password = data.get("password", "")
 
-    # Special flag for logging in as leaked_user
-    if username == "leaked_user" and password == "leakedpass":
+    # ─── USER-SPECIFIC TARGET SELECTION ───
+    # Generates a different target for different students based on their IP
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "127.0.0.1"
+    
+    def get_session_target(wordlist, salt):
+        seed_str = f"{client_ip}_{salt}_{datetime.date.today().isoformat()}"
+        seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+        rng = random.Random(seed)
+        return rng.choice(wordlist)
+
+    # Calculate this student's specific target
+    session_username = get_session_target(LAB_USERNAME_WORDLIST, "user")
+    session_password = get_session_target(LAB_PASSWORD_WORDLIST, "pass")
+
+    # Special flag for logging in as a user discovered via SQL Injection
+    if username in VULNERABLE_TARGET_USERS and password == VULNERABLE_TARGET_USERS[username]:
         response = make_response(jsonify({
             "success": True,
             "message": "Login successful",
             "username": username,
-            "ctf_flag": CTF_FLAGS["LEAKED_LOGIN"],
-            "flag_hint": "Leaked User Login"
+            "ctf_flag": CTF_FLAGS["LEAKED_PROFILE"],
+            "flag_hint": "Discovery of Leaked Credentials via SQLi"
         }))
         response.set_cookie("role", "user", httponly=False)
         response.set_cookie("username", username, httponly=False)
         return response
 
-    active_username, active_password = LAB_ACTIVE_CREDENTIAL
-
-    # Separate brute-force lab path: exactly one active credential pair is valid.
-    # This account is intentionally not stored in the main SQLite users table.
-    if username in LAB_USERNAME_WORDLIST:
-        if username == active_username and password == active_password:
+    # Check against this student's specific Brute Force target
+    if username == session_username:
+        if password == session_password:
             response = make_response(jsonify({
                 "success": True,
                 "message": "Login successful",
@@ -271,28 +344,36 @@ def login():
             response.set_cookie("role", "user", httponly=False)
             response.set_cookie("username", username, httponly=False)
             return response
-        return jsonify({"success": False, "message": "Invalid password"}), 401
+        
+        # VULNERABILITY: User exists (Specific for this student's IP)
+        return jsonify({
+            "success": False, 
+            "message": "Incorrect Password",
+            "debug_info": "User account is valid, check credentials"
+        }), 401
 
     conn = get_db()
     cursor = conn.cursor()
 
-    # Using parameterized query only for login (to keep it working),
-    # but NO rate limiting, NO lockout, NO CAPTCHA
+    # Database check
     cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
     user = cursor.fetchone()
     conn.close()
 
     if not user:
-        return jsonify({"success": False, "message": "User not found"}), 401
+        # Generic error for all other users (even if they are in the wordlist)
+        return jsonify({"success": False, "message": "Incorrect Username and Password"}), 401
 
-    # Lab design rule: keep brute-force (login) and admin access challenges separate.
-    # Admin must not be reachable via login guessing; use cookie manipulation path instead.
     if user["username"] == "admin":
-        return jsonify({"success": False, "message": "Invalid credentials"}), 401
+        return jsonify({"success": False, "message": "Incorrect Username and Password"}), 401
 
     if user["password"] != password:
-        # VULNERABILITY: Reveals specific error - helps brute force
-        return jsonify({"success": False, "message": "Invalid password"}), 401
+        # VULNERABILITY: Existing database users also reveal existence
+        return jsonify({
+            "success": False, 
+            "message": "Incorrect Password",
+            "debug_info": "User account is valid, check credentials"
+        }), 401
 
     response = make_response(jsonify({
         "success": True,
@@ -322,9 +403,6 @@ def search_products():
     conn = get_db()
     cursor = conn.cursor()
 
-    # VULNERABLE: Direct string concatenation - allows UNION-based injection
-    # Try: ' UNION SELECT username, password FROM users--
-    # Only leak the special 'leaked_user' for CTF
     query = "SELECT name, price FROM products WHERE name LIKE '%" + search + "%'"
 
     try:
@@ -336,8 +414,21 @@ def search_products():
         # If SQLi detected, replace results with only the leaked user
         if "union" in search.lower() and "users" in search.lower():
             response["ctf_flag"] = CTF_FLAGS["SQLI"]
-            response["flag_hint"] = "SQL Injection"
-            response["results"] = [{"name": "leaked_user", "price": "leakedpass"}]
+            response["flag_hint"] = "SQL Injection (Discovery)"
+            
+            # Real leak: fetch from the SENSITIVE staff_accounts table
+            # Students must now discover this table name or use it in their UNION
+            conn_leak = get_db()
+            cursor_leak = conn_leak.cursor()
+            cursor_leak.execute("SELECT username, password FROM staff_accounts")
+            all_staff = cursor_leak.fetchall()
+            conn_leak.close()
+            
+            # Format results
+            response["results"] = [
+                {"name": f"Staff: {u['username']} (Pass: {u['password']})", "price": 0} 
+                for u in all_staff
+            ]
         return jsonify(response)
     except Exception as e:
         conn.close()
@@ -367,7 +458,11 @@ def admin_dashboard():
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT id, username, password FROM users")
-        users = [dict(row) for row in cursor.fetchall()]
+        all_users_list = [dict(row) for row in cursor.fetchall()]
+        
+        # Filter out the SQLi challenge target users to keep challenges separate
+        users = [u for u in all_users_list if u["username"] not in VULNERABLE_TARGET_USERS]
+        
         cursor.execute("SELECT * FROM products")
         products = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -463,6 +558,33 @@ def validate_flag():
     if vuln:
         return jsonify({"valid": True, "vulnerability": vuln})
     return jsonify({"valid": False, "vulnerability": None}), 404
+
+@app.route("/api/user/flag", methods=["GET"])
+def get_user_profile_flag():
+    username = request.cookies.get("username")
+    
+    # Use the same IP-based logic to find this student's specific target
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "127.0.0.1"
+    seed_str = f"{client_ip}_user_{datetime.date.today().isoformat()}"
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+    rng = random.Random(seed)
+    session_username = rng.choice(LAB_USERNAME_WORDLIST)
+
+    if username in VULNERABLE_TARGET_USERS:
+        return jsonify({
+            "success": True, 
+            "ctf_flag": CTF_FLAGS["LEAKED_PROFILE"],
+            "flag_type": "SQL Injection Data Breach"
+        })
+    
+    if username == session_username:
+        return jsonify({
+            "success": True, 
+            "ctf_flag": CTF_FLAGS["BRUTE"],
+            "flag_type": "Brute Force Success"
+        })
+
+    return jsonify({"success": False, "message": "No flag available for this user."}), 403
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

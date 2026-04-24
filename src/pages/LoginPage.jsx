@@ -1,6 +1,7 @@
 import React, { useState } from "react";
+import "../styles/LoginPage.css";
+import toast from 'react-hot-toast';
 
-// No rate limiting, no CAPTCHA, no lockout - intentionally vulnerable
 export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -22,9 +23,14 @@ export default function LoginPage({ onLogin }) {
       const data = await res.json();
 
       if (data.success) {
+        if (data.ctf_flag) {
+          toast.success(`Success! Staff account accessed. \nFlag location: Profile Page`, {
+            duration: 6000,
+            icon: '🚩',
+          });
+        }
         onLogin(data.username);
       } else {
-        // VULNERABILITY: Specific error message helps brute force
         setError(data.message);
       }
     } catch {
@@ -35,15 +41,16 @@ export default function LoginPage({ onLogin }) {
   };
 
   return (
-    <div className="page login-page">
-      <div className="login-card">
-        <div className="login-logo">🛒</div>
-        <h1>ShopEasy</h1>
-        <p className="login-subtitle">Sign in to your account</p>
+    <div className="login-page">
+      <div className="login-logo">
+        🛒 Shop<span>Easy</span>
+      </div>
 
+      <div className="login-card">
+        <h1>Sign in</h1>
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label>Username</label>
+            <label>Email or mobile phone number</label>
             <input
               type="text"
               value={username}
@@ -62,20 +69,21 @@ export default function LoginPage({ onLogin }) {
             />
           </div>
 
-          {error && (
-            <div className="error-box">
-              ⚠️ {error}
-            </div>
-          )}
+          {error && <div style={{color: '#CC0C39', fontSize: '0.8rem'}}>⚠️ {error}</div>}
 
           <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Signing in..." : "Continue"}
           </button>
         </form>
 
-        <div className="login-hint">
-          <small>Demo: Try username <code>alice</code></small>
-        </div>
+        <p className="login-terms">
+          By continuing, you agree to ShopEasy's <span>Conditions of Use</span> and <span>Privacy Notice</span>.
+        </p>
+      </div>
+
+      <div className="new-to-shopeasy">
+        <p>New to ShopEasy?</p>
+        <button className="create-account-btn">Create your ShopEasy account</button>
       </div>
     </div>
   );

@@ -1,0 +1,136 @@
+.login-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #fff;
+  padding: 20px;
+}
+
+.login-logo {
+  font-family: var(--font-heading);
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+
+.login-logo span {
+  color: var(--accent-bright);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 350px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login-card h1 {
+  font-size: 1.8rem;
+  font-weight: 400;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.form-group input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.9rem;
+}
+
+.form-group input:focus {
+  border-color: var(--accent-bright);
+  box-shadow: 0 0 3px 2px rgba(255, 153, 0, 0.2);
+  outline: none;
+}
+
+.login-btn {
+  background: var(--accent);
+  border: 1px solid #a88734;
+  padding: 8px;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.login-btn:hover {
+  background: var(--accent-hover);
+}
+
+.login-terms {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.login-terms span {
+  color: var(--link);
+  cursor: pointer;
+}
+
+.login-terms span:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
+}
+
+.new-to-shopeasy {
+  width: 100%;
+  max-width: 350px;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.new-to-shopeasy p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  width: 100%;
+  text-align: center;
+  position: relative;
+}
+
+.new-to-shopeasy p::before, .new-to-shopeasy p::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 30%;
+  height: 1px;
+  background: var(--border);
+}
+
+.new-to-shopeasy p::before { left: 0; }
+.new-to-shopeasy p::after { right: 0; }
+
+.create-account-btn {
+  width: 100%;
+  background: #f7f8fa;
+  border: 1px solid #adb1b8;
+  padding: 8px;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255,255,255,.4) inset;
+}
+
+.create-account-btn:hover {
+  background: #e7e9ec;
+}

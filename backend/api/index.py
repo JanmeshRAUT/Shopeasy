@@ -1,5 +1,10 @@
 import sys
+import os
 import traceback
+
+# Add parent directory to sys.path to find app.py
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import app, ensure_database
 try:
     ensure_database()

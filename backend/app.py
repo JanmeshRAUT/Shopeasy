@@ -188,6 +188,7 @@ def ensure_database():
         )
         """
     )
+    conn.commit() # Ensure schema is saved before checking counts
 
     users = [
         ("admin", "admin_shopeasy_secure_#2026"),
@@ -226,7 +227,7 @@ def ensure_database():
         cursor.executemany(
             "INSERT OR IGNORE INTO staff_accounts (username, password, role) VALUES (?, ?, ?)", staff
         )
-
+    
     products = [
         ("Wireless Headphones", 49.99),
         ("Bluetooth Speaker", 29.99),

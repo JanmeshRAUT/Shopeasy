@@ -7,6 +7,8 @@ import ProductDetail from "./pages/ProductDetail";
 import ProfilePage from "./pages/ProfilePage";
 import { getProductImage } from "./utils/productImages";
 import { Toaster } from 'react-hot-toast';
+import heroTechImg from "./assets/hero-tech.png";
+import heroOfficeImg from "./assets/hero-office.png";
 import "./App.css";
 
 function getCookie(name) {
@@ -138,7 +140,7 @@ export default function App() {
         {page === "home" && (
           <section className="home-page">
             <div className="hero-carousel">
-              <div className="hero-slide" style={{ backgroundImage: `url('/src/assets/hero-tech.png')` }}>
+              <div className="hero-slide" style={{ backgroundImage: `url('${heroTechImg}')` }}>
                 <div className="hero-content">
                   <h1>Up to 40% off on Premium Tech</h1>
                   <p>Upgrade your workstation with the latest mechanical keyboards and wireless audio.</p>

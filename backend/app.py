@@ -434,8 +434,17 @@ def search_products():
             ]
         return jsonify(response)
     except Exception as e:
-        conn.close()
-        return jsonify({"success": False, "error": str(e), "query": query}), 400
+        try:
+            conn.close()
+        except:
+            pass
+        # Return more detailed error for debugging lab challenges
+        return jsonify({
+            "success": False, 
+            "error": f"Database Error: {str(e)}", 
+            "query": query,
+            "help": "Ensure your UNION select has exactly 2 columns to match 'name' and 'price'"
+        }), 400
 
 @app.route("/api/products", methods=["GET"])
 def get_products():

@@ -1,0 +1,9 @@
+.git
+.gitignore
+.venv
+.vscode
+node_modules
+# backend/data removed so wordlists are bundled
+backend/shopeasy.db
+*.log
+.DS_Store
